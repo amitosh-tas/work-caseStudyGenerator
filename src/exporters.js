@@ -87,6 +87,7 @@ export async function downloadPdf(data, mode = 'long', onProgress = () => {}) {
 export function readImage(file, max = 320, square = true) {
   return new Promise((resolve) => {
     const fr = new FileReader();
+    fr.onerror = fr.onabort = () => resolve('');
     fr.onload = () => {
       const im = new Image();
       im.onload = () => {

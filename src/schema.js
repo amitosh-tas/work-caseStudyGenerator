@@ -17,7 +17,7 @@ export const SECTIONS = [
       T('author', 'Your name'),
       T('tagline', 'Your tagline', { ph: 'e.g. Shopify, AI agents and workflow automation' }),
       T('link', 'Booking / contact link', { ph: 'https://' }),
-      T('pageUrl', 'Page URL (for the web version)', { ph: 'https://' }),
+      T('pageUrl', 'Web page URL', { ph: 'https://' }),
       { k: 'photo', label: 'Your photo', t: 'file' },
       { k: 'green', label: 'Accent', t: 'color' },
       { k: 'navy', label: 'Dark', t: 'color' },

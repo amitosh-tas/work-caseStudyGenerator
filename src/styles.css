@@ -45,9 +45,16 @@ input, textarea, select { font: 16px Inter, sans-serif; color: var(--ink); backg
 textarea { min-height: 88px; resize: vertical; }
 input[type=color] { padding: 4px; height: 44px; }
 input[type=file] { font-size: 14px; padding: 8px; }
-.photo { display: flex; gap: 8px; align-items: center; }
-.photo img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex: none; }
-.photo button { min-height: 38px; font-size: 13px; padding: 0 10px; }
+#s-brand .row { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); align-items: start; }
+#s-brand .row > label > input { height: 44px; }
+.photo-field { display: grid; gap: 5px; font-size: 14px; font-weight: 600; }
+.photo { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 44px; }
+.photo img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex: none; }
+.photo button { min-height: 44px; font-size: 13px; padding: 0 10px; white-space: nowrap; }
+.photo .photo-change { flex: 1; }
+.photo .photo-remove { display: grid; place-items: center; flex: 0 0 44px; padding: 0; color: var(--mute); }
+.photo .photo-remove:hover:enabled { color: #8a1631; border-color: #efc0c9; }
+.photo-error { color: #8a1631; font-weight: 400; }
 
 .list { display: grid; gap: 10px; }
 .list h5 { margin: 6px 0 0; font-size: 14px; }
