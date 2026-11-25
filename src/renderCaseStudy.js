@@ -16,9 +16,9 @@ export function caseStudyCss(d) {
 
 /**
  * Inner HTML of <article class="ma-case">.
- * forPdf: opens the FAQ answers so they appear in the PDF.
+ * PDF exports list embedded supporting files. Web exports include download links.
  */
-export function caseStudyBody(d, { forPdf = false, openFaq = forPdf } = {}) {
+export function caseStudyBody(d, { forPdf = false, preview = false } = {}) {
   const v = (k) => String(d[k] ?? '').trim();
   const ag = v('agency') || 'Agency';
   const au = v('author');
@@ -38,11 +38,9 @@ export function caseStudyBody(d, { forPdf = false, openFaq = forPdf } = {}) {
   const attachments = d.attachments || [];
   const attachmentGrid = (files) => files.length ? `<div class="ma-grid">${files.map((file) => {
     const name = esc(file.name);
-    const url = esc(attachmentUrl(file));
-    if (isImage(file)) return `<figure class="ma-file"><img src="${url}" alt="${name}"><figcaption>${name}</figcaption></figure>`;
-    if (forPdf) return `<div class="ma-card ma-file"><strong>${name}</strong><p>Embedded file in this PDF</p></div>`;
-    const player = file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : '';
-    return `<div class="ma-card ma-file">${player ? `<${player} controls preload="none" src="${url}"></${player}>` : ''}<a href="${url}" download="${name}">${name}</a></div>`;
+    if (isImage(file)) return `<figure class="ma-file"><img src="${esc(attachmentUrl(file))}" alt="${name}"><figcaption>${name}</figcaption></figure>`;
+    const label = forPdf || preview ? name : `<a href="${esc(attachmentUrl(file))}" download="${name}">${name}</a>`;
+    return `<div class="ma-card ma-file">${label}</div>`;
   }).join('')}</div>` : '';
   let h = '';
 
@@ -86,7 +84,7 @@ export function caseStudyBody(d, { forPdf = false, openFaq = forPdf } = {}) {
 
   // FAQ
   if (faq.length)
-    h += section('ma-mint', `${kh('Project questions', v('faHead'))}<div>${faq.map((q) => `<details class="ma-faq"${openFaq ? ' open' : ''}><summary>${esc(q.q)}</summary><p>${esc(q.a)}</p></details>`).join('')}</div>`);
+    h += section('ma-mint', `${kh('Project questions', v('faHead'))}<div>${faq.map((q) => `<details class="ma-faq"${forPdf || preview ? ' open' : ''}><summary>${esc(q.q)}</summary><p>${esc(q.a)}</p></details>`).join('')}</div>`);
 
   const appendix = attachments.filter((file) => file.placement !== 'hero');
   if (appendix.length) h += section('', `<h2>Attachments</h2>${attachmentGrid(appendix)}`);

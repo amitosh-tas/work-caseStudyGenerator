@@ -10,7 +10,7 @@ export default function Preview({ data }) {
   const [scale, setScale] = useState(0.5);
   const [height, setHeight] = useState(2000);
 
-  const html = useMemo(() => caseStudyDocument(data, { fonts: true, openFaq: true }), [data]);
+  const html = useMemo(() => caseStudyDocument(data, { fonts: true, preview: true }), [data]);
 
   useEffect(() => {
     const el = wrapRef.current;

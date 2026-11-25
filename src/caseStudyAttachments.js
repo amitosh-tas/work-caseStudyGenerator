@@ -1,11 +1,12 @@
-const TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'audio/mpeg', 'audio/wav', 'video/mp4', 'video/webm']);
+import { acceptsAttachment } from './ai/attachments.js';
+
 const MAX_BYTES = 24 * 1024 * 1024;
 export const isImage = (file) => file.type.startsWith('image/');
 
 export function normalizeAttachments(files) {
   if (!Array.isArray(files)) return [];
   return files.filter((file) => file && typeof file.id === 'string' && typeof file.name === 'string'
-    && TYPES.has(file.type) && typeof file.data === 'string' && /^[A-Za-z0-9+/]+={0,2}$/.test(file.data)
+    && acceptsAttachment('gemini', file.type) && typeof file.data === 'string' && /^[A-Za-z0-9+/]+={0,2}$/.test(file.data)
     && file.data.length % 4 === 0)
     .map(({ id, name, type, data, placement }) => ({ id, name, type, data,
       placement: placement === 'hero' && type.startsWith('image/') ? 'hero' : 'appendix' }));
