@@ -103,6 +103,11 @@ export const SECTIONS = [
 export const FIELDS = SECTIONS.flatMap((s) => s.fields.filter((f) => f.t !== 'file'));
 export const LISTS = SECTIONS.flatMap((s) => s.lists || []);
 export const DEFAULT_COLORS = { green: '#116e08', navy: '#001935', mint: '#f4f9f3' };
+const SECTION_IDS = SECTIONS.map((section) => section.id);
+export function sectionOrder(order) {
+  const requested = Array.isArray(order) ? order.filter((id) => SECTION_IDS.includes(id)) : [];
+  return [...new Set([...requested, ...SECTION_IDS])];
+}
 
 export function emptyData(keep = {}) {
   const d = { photo: '', attachments: [] };
@@ -121,6 +126,7 @@ export function normalize(o) {
   });
   d.photo = typeof o.photo === 'string' && o.photo.startsWith('data:image/') ? o.photo : '';
   d.attachments = normalizeAttachments(o.attachments);
+  d.sectionOrder = sectionOrder(o.sectionOrder);
   return d;
 }
 

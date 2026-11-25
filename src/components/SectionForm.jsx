@@ -4,7 +4,9 @@ import ListEditor from './ListEditor.jsx';
 import DocumentAttachments from './DocumentAttachments.jsx';
 import { readImage } from '../exporters.js';
 
-export default function SectionForm({ section, data, setField, setList, onAddAttachments }) {
+const SECTION_DRAG_TYPE = 'application/x-case-study-section';
+
+export default function SectionForm({ section, data, setField, setList, onAddAttachments, onMove, previousId, nextId }) {
   const photoInput = useRef(null);
   const [readingPhoto, setReadingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState('');
@@ -30,8 +32,39 @@ export default function SectionForm({ section, data, setField, setList, onAddAtt
   };
 
   return (
-    <fieldset id={`s-${section.id}`}>
-      <legend>{section.name}</legend>
+    <fieldset id={`s-${section.id}`}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes(SECTION_DRAG_TYPE)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        event.currentTarget.classList.add('section-drop-target');
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.classList.remove('section-drop-target');
+      }}
+      onDragEnd={(event) => event.currentTarget.classList.remove('section-drop-target')}
+      onDrop={(event) => {
+        event.currentTarget.classList.remove('section-drop-target');
+        const source = event.dataTransfer.getData(SECTION_DRAG_TYPE);
+        if (!source) return;
+        event.preventDefault();
+        onMove(source, section.id);
+      }}>
+      <legend>
+        {section.name}
+        <button type="button" className="section-handle" draggable aria-label={`Reorder ${section.name} with Up or Down`}
+          title="Drag to reorder or use the arrow keys"
+          onDragStart={(event) => {
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData(SECTION_DRAG_TYPE, section.id);
+          }}
+          onKeyDown={(event) => {
+            const target = { ArrowUp: previousId, ArrowDown: nextId }[event.key];
+            if (!target) return;
+            event.preventDefault();
+            onMove(section.id, target);
+          }}>⠿</button>
+      </legend>
       {section.id === 'attachments' && (
         <DocumentAttachments files={data.attachments} onAdd={onAddAttachments}
           onChange={(files) => setField('attachments', files)} />

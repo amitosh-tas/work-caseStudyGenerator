@@ -5,6 +5,7 @@ export function buildSystemPrompt(data, { web, userName }) {
   const draft = { ...data };
   draft.attachments = (data.attachments || []).map(({ name, placement }) => ({ name, placement }));
   delete draft.photo;
+  delete draft.sectionOrder;
   ['green', 'navy', 'mint'].forEach((k) => delete draft[k]);
   const who = data.author ? `${data.author} from ${data.agency || 'their agency'}` : data.agency || 'an agency or freelancer';
   const callThem = (userName || '').trim();

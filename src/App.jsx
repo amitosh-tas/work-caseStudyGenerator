@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { SECTIONS, SAMPLE, emptyData, normalize } from './schema.js';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { SECTIONS, SAMPLE, emptyData, normalize, sectionOrder } from './schema.js';
 import SectionForm from './components/SectionForm.jsx';
 import Preview from './components/Preview.jsx';
 import Chat from './components/Chat.jsx';
@@ -66,8 +66,10 @@ export default function App({ attachmentStorage = {} }) {
   const [status, setStatus] = useState(attachmentStorage.failed ? 'Could not load saved case study attachments.' : '');
   const [active, setActive] = useState(SECTIONS[0].id);
   const [view, setView] = useState('edit');
+  const sections = sectionOrder(data.sectionOrder).map((id) => SECTIONS.find((section) => section.id === id));
   const fileRef = useRef(null);
   const chatInputRef = useRef(null);
+  const sectionPositions = useRef(null);
   const abortRef = useRef(null);
   const dataRef = useRef(data);
   const savedAttachments = useRef(data.attachments);
@@ -231,6 +233,30 @@ export default function App({ attachmentStorage = {} }) {
     setActive(id);
     requestAnimationFrame(() => document.getElementById(`s-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
+  const moveSection = (from, to) => {
+    const order = sections.map((section) => section.id);
+    const start = order.indexOf(from);
+    const end = order.indexOf(to);
+    if (start < 0 || end < 0 || start === end) return;
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      sectionPositions.current = new Map(order.map((id) => [
+        id, document.getElementById(`s-${id}`)?.getBoundingClientRect().top,
+      ]));
+    }
+    order.splice(end, 0, ...order.splice(start, 1));
+    setData((draft) => ({ ...draft, sectionOrder: order }), isSample);
+  };
+
+  useLayoutEffect(() => {
+    if (!sectionPositions.current) return;
+    for (const [id, top] of sectionPositions.current) {
+      const card = document.getElementById(`s-${id}`);
+      const distance = top - card?.getBoundingClientRect().top;
+      if (distance) card.animate([{ transform: `translateY(${distance}px)` }, { transform: 'none' }],
+        { duration: 220, easing: 'ease-out' });
+    }
+    sectionPositions.current = null;
+  }, [data.sectionOrder]);
 
   const progress = sectionProgress(data);
   const doneCount = progress.filter((p) => p.state === 'done').length;
@@ -302,7 +328,7 @@ export default function App({ attachmentStorage = {} }) {
           <aside className="side">
             <h4>SECTIONS</h4>
             <nav>
-              {SECTIONS.map((s) => (
+              {sections.map((s) => (
                 <a key={s.id} href={`#s-${s.id}`} className={active === s.id ? 'on' : ''} style={{ '--c': s.color }}
                   onClick={(e) => { e.preventDefault(); goTo(s.id); }}>
                   <i />{s.name}
@@ -328,7 +354,8 @@ export default function App({ attachmentStorage = {} }) {
               <button type="button" role="tab" aria-selected={view === 'preview'} onClick={() => setView('preview')}>Preview</button>
             </div>
             <form className="forms" onSubmit={(e) => e.preventDefault()} autoComplete="off">
-              {SECTIONS.map((s) => <SectionForm key={s.id} section={s} data={data} setField={setField} setList={setList}
+              {sections.map((s, index) => <SectionForm key={s.id} section={s} data={data} setField={setField} setList={setList}
+                onMove={moveSection} previousId={sections[index - 1]?.id} nextId={sections[index + 1]?.id}
                 onAddAttachments={addToDocument} />)}
             </form>
           </main>

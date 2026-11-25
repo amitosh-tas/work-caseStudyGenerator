@@ -1,5 +1,6 @@
 // Turns the form data into the case study markup, using the uploaded design (ma-case classes).
 import designCss from './caseStudy.css?raw';
+import { sectionOrder } from './schema.js';
 import { attachmentUrl } from './ai/attachments.js';
 import { isImage } from './caseStudyAttachments.js';
 
@@ -42,57 +43,57 @@ export function caseStudyBody(d, { forPdf = false, preview = false } = {}) {
     const label = forPdf || preview ? name : `<a href="${esc(attachmentUrl(file))}" download="${name}">${name}</a>`;
     return `<div class="ma-card ma-file">${label}</div>`;
   }).join('')}</div>` : '';
-  let h = '';
+  const sections = {};
 
   // Hero
-  h += section('ma-hero', `${v('kicker') ? `<div class="ma-kicker"><p>${esc(v('kicker'))}</p></div>` : ''}<h1>${esc(title)}</h1>${v('deck') ? `<div class="ma-deck"><p>${esc(v('deck'))}</p></div>` : ''}${v('intro') ? `<div class="ma-prose"><p>${esc(v('intro'))}</p></div>` : ''}${v('byline') ? `<div class="ma-small"><p>${esc(v('byline'))}</p></div>` : ''}${v('heroBtn') && trunk.length ? `<div class="ma-button ma-gap"><a href="#workflow">${esc(v('heroBtn'))}</a></div>` : ''}${facts.length ? `<div class="ma-grid ma-four">${facts.map((f) => `<div class="ma-card"><span class="ma-label">${esc(f.label)}</span><strong>${esc(f.value)}</strong></div>`).join('')}</div>` : ''}`);
+  sections.hero = section('ma-hero', `${v('kicker') ? `<div class="ma-kicker"><p>${esc(v('kicker'))}</p></div>` : ''}<h1>${esc(title)}</h1>${v('deck') ? `<div class="ma-deck"><p>${esc(v('deck'))}</p></div>` : ''}${v('intro') ? `<div class="ma-prose"><p>${esc(v('intro'))}</p></div>` : ''}${v('byline') ? `<div class="ma-small"><p>${esc(v('byline'))}</p></div>` : ''}${v('heroBtn') && trunk.length ? `<div class="ma-button ma-gap"><a href="#workflow">${esc(v('heroBtn'))}</a></div>` : ''}${facts.length ? `<div class="ma-grid ma-four">${facts.map((f) => `<div class="ma-card"><span class="ma-label">${esc(f.label)}</span><strong>${esc(f.value)}</strong></div>`).join('')}</div>` : ''}`);
 
   const heroFiles = attachments.filter((file) => file.placement === 'hero');
-  if (heroFiles.length) h = h.replace(/<\/div><\/section>$/, () => `${attachmentGrid(heroFiles)}</div></section>`);
+  if (heroFiles.length) sections.hero = sections.hero.replace(/<\/div><\/section>$/, () => `${attachmentGrid(heroFiles)}</div></section>`);
 
   // Challenge
   if (v('chHead') || v('chText') || cards.length)
-    h += section('', `${kh('The challenge', v('chHead'))}<div class="ma-prose">${P(v('chText'))}</div>${cards.length ? `<div class="ma-grid">${cards.map((c) => `<div class="ma-card"><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p></div>`).join('')}</div>` : ''}`);
+    sections.challenge = section('', `${kh('The challenge', v('chHead'))}<div class="ma-prose">${P(v('chText'))}</div>${cards.length ? `<div class="ma-grid">${cards.map((c) => `<div class="ma-card"><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p></div>`).join('')}</div>` : ''}`);
 
   // What we built
   if (v('buHead') || steps.length)
-    h += section('ma-mint', `${kh('What we built', v('buHead'))}<div class="ma-grid">${steps.map((c, i) => `<div class="ma-card"><div class="ma-step"><p>${String(i + 1).padStart(2, '0')}</p></div><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p></div>`).join('')}</div>`, 'implementation');
+    sections.built = section('ma-mint', `${kh('What we built', v('buHead'))}<div class="ma-grid">${steps.map((c, i) => `<div class="ma-card"><div class="ma-step"><p>${String(i + 1).padStart(2, '0')}</p></div><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p></div>`).join('')}</div>`, 'implementation');
 
   // CTA bar
   if (v('barTitle'))
-    h += `<section class="ma-section ma-bar-zone"><div class="ma-inner"><aside class="ma-cta-bar" aria-label="${esc(v('barTitle'))}"><div class="ma-contact">${img(56)}<div><strong>${esc(v('barTitle'))}</strong><p>${esc(v('barText'))}</p></div></div>${v('btnLabel') ? `<a class="ma-button" href="${esc(link || '#')}">${esc(v('btnLabel'))} ↗</a>` : ''}</aside></div></section>`;
+    sections.built = (sections.built || '') + `<section class="ma-section ma-bar-zone"><div class="ma-inner"><aside class="ma-cta-bar" aria-label="${esc(v('barTitle'))}"><div class="ma-contact">${img(56)}<div><strong>${esc(v('barTitle'))}</strong><p>${esc(v('barText'))}</p></div></div>${v('btnLabel') ? `<a class="ma-button" href="${esc(link || '#')}">${esc(v('btnLabel'))} ↗</a>` : ''}</aside></div></section>`;
 
   // Workflow diagram
   if (v('wfHead') || trunk.length) {
     const branches = yes.length || no.length
       ? `<div class="ma-branches"><div class="ma-branch"><div class="ma-branch-label">${esc(v('yesLabel').toUpperCase())}</div>${chain(yes, 'ma-result')}</div><div class="ma-branch"><div class="ma-branch-label">${esc(v('noLabel').toUpperCase())}</div>${chain(no)}</div></div>`
       : '';
-    h += section('ma-dark', `${kh('The workflow', v('wfHead'))}${v('wfIntro') ? `<p>${esc(v('wfIntro'))}</p>` : ''}<figure class="ma-diagram" aria-label="${esc(title)} workflow diagram"><div class="ma-trunk">${chain(trunk)}${v('decTitle') ? `${trunk.length ? '<div class="ma-connector" aria-hidden="true"></div>' : ''}${node({ title: v('decTitle'), sub: v('decSub') }, 'ma-decision')}` : ''}</div>${branches}${sep.length ? `<div class="ma-phone-path"><div class="ma-branch-label">${esc(v('sepLabel').toUpperCase())}</div>${chain(sep)}</div>` : ''}${v('wfCaption') ? `<figcaption>${esc(v('wfCaption'))}</figcaption>` : ''}</figure>${v('wfNote') ? `<div class="ma-small ma-gap"><p>${esc(v('wfNote'))}</p></div>` : ''}`, 'workflow');
+    sections.workflow = section('ma-dark', `${kh('The workflow', v('wfHead'))}${v('wfIntro') ? `<p>${esc(v('wfIntro'))}</p>` : ''}<figure class="ma-diagram" aria-label="${esc(title)} workflow diagram"><div class="ma-trunk">${chain(trunk)}${v('decTitle') ? `${trunk.length ? '<div class="ma-connector" aria-hidden="true"></div>' : ''}${node({ title: v('decTitle'), sub: v('decSub') }, 'ma-decision')}` : ''}</div>${branches}${sep.length ? `<div class="ma-phone-path"><div class="ma-branch-label">${esc(v('sepLabel').toUpperCase())}</div>${chain(sep)}</div>` : ''}${v('wfCaption') ? `<figcaption>${esc(v('wfCaption'))}</figcaption>` : ''}</figure>${v('wfNote') ? `<div class="ma-small ma-gap"><p>${esc(v('wfNote'))}</p></div>` : ''}`, 'workflow');
   }
 
   // Extra section
   if (v('exHead') || v('exText'))
-    h += section('', `${kh(v('exKicker'), v('exHead'))}<div class="ma-prose">${P(v('exText'))}</div>`);
+    sections.extra = section('', `${kh(v('exKicker'), v('exHead'))}<div class="ma-prose">${P(v('exText'))}</div>`);
 
   // Tools, stack & hosting
   if (v('toHead') || tools.length || stack.length || v('hosting'))
-    h += section('ma-mint', `${kh('The connected tools', v('toHead'))}<div class="ma-grid">${tools.map((c) => `<div class="ma-card"><h3>${esc(c.name)}</h3><p>${esc(c.role)}</p></div>`).join('')}${stack.length ? `<div class="ma-card"><h3>Tech stack</h3><p>${stack.map(esc).join(' · ')}</p></div>` : ''}${v('hosting') ? `<div class="ma-card"><h3>Server &amp; hosting</h3>${v('hosting').split('\n').filter((x) => x.trim()).map((x) => `<p>${esc(x.trim())}</p>`).join('')}</div>` : ''}</div>`);
+    sections.tools = section('ma-mint', `${kh('The connected tools', v('toHead'))}<div class="ma-grid">${tools.map((c) => `<div class="ma-card"><h3>${esc(c.name)}</h3><p>${esc(c.role)}</p></div>`).join('')}${stack.length ? `<div class="ma-card"><h3>Tech stack</h3><p>${stack.map(esc).join(' · ')}</p></div>` : ''}${v('hosting') ? `<div class="ma-card"><h3>Server &amp; hosting</h3>${v('hosting').split('\n').filter((x) => x.trim()).map((x) => `<p>${esc(x.trim())}</p>`).join('')}</div>` : ''}</div>`);
 
   // Outcome
   if (v('ouHead') || v('ouText') || metrics.length)
-    h += section('', `${kh('The outcome', v('ouHead'))}<div class="ma-prose">${P(v('ouText'))}</div>${metrics.length ? `<div class="ma-grid ma-four">${metrics.map((m) => `<div class="ma-card"><strong style="font-size:30px;color:var(--green)">${esc(m.value)}</strong><span class="ma-label">${esc(m.label)}</span></div>`).join('')}</div>` : ''}${v('ouNote') ? `<div class="ma-note"><p>${esc(v('ouNote'))}</p></div>` : ''}`);
+    sections.outcome = section('', `${kh('The outcome', v('ouHead'))}<div class="ma-prose">${P(v('ouText'))}</div>${metrics.length ? `<div class="ma-grid ma-four">${metrics.map((m) => `<div class="ma-card"><strong style="font-size:30px;color:var(--green)">${esc(m.value)}</strong><span class="ma-label">${esc(m.label)}</span></div>`).join('')}</div>` : ''}${v('ouNote') ? `<div class="ma-note"><p>${esc(v('ouNote'))}</p></div>` : ''}`);
 
   // FAQ
   if (faq.length)
-    h += section('ma-mint', `${kh('Project questions', v('faHead'))}<div>${faq.map((q) => `<details class="ma-faq"${forPdf || preview ? ' open' : ''}><summary>${esc(q.q)}</summary><p>${esc(q.a)}</p></details>`).join('')}</div>`);
+    sections.faq = section('ma-mint', `${kh('Project questions', v('faHead'))}<div>${faq.map((q) => `<details class="ma-faq"${forPdf || preview ? ' open' : ''}><summary>${esc(q.q)}</summary><p>${esc(q.a)}</p></details>`).join('')}</div>`);
 
   const appendix = attachments.filter((file) => file.placement !== 'hero');
-  if (appendix.length) h += section('', `<h2>Attachments</h2>${attachmentGrid(appendix)}`);
+  if (appendix.length) sections.attachments = section('', `<h2>Attachments</h2>${attachmentGrid(appendix)}`);
 
   // Closing
-  h += section('ma-dark', `${kh('Work with ' + (au || ag), v('endHead'))}<div class="ma-prose">${P(v('endText'))}</div><div class="ma-contact">${img(64)}<div><p><strong>${esc(au ? 'Talk with ' + au : ag)}</strong></p><p>${esc(v('tagline'))}</p></div></div>${v('btnLabel') ? `<div class="ma-button ma-gap"><a href="${esc(link || '#')}">${esc(v('btnLabel'))}</a></div>` : ''}`);
+  sections.cta = section('ma-dark', `${kh('Work with ' + (au || ag), v('endHead'))}<div class="ma-prose">${P(v('endText'))}</div><div class="ma-contact">${img(64)}<div><p><strong>${esc(au ? 'Talk with ' + au : ag)}</strong></p><p>${esc(v('tagline'))}</p></div></div>${v('btnLabel') ? `<div class="ma-button ma-gap"><a href="${esc(link || '#')}">${esc(v('btnLabel'))}</a></div>` : ''}`);
 
-  return h;
+  return sectionOrder(d.sectionOrder).map((id) => sections[id]).join('');
 }
 
 /** Complete standalone web page (for WordPress / Elementor or hosting as-is). */
