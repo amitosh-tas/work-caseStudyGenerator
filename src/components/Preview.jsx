@@ -6,7 +6,7 @@ const DESIGN_WIDTH = 1240;
 /** Live preview: the real case study page in an iframe, scaled to fit the panel. */
 export default function Preview({ data }) {
   const wrapRef = useRef(null);
-  const frameRef = useRef(null);
+  const contentObserver = useRef(null);
   const [scale, setScale] = useState(0.5);
   const [height, setHeight] = useState(2000);
 
@@ -19,20 +19,23 @@ export default function Preview({ data }) {
     return () => ro.disconnect();
   }, []);
 
-  const measure = () => {
-    const doc = frameRef.current?.contentDocument;
-    if (doc?.documentElement) setHeight(doc.documentElement.scrollHeight);
-  };
+  useEffect(() => () => contentObserver.current?.disconnect(), []);
 
-  useEffect(() => {
-    const t = setTimeout(measure, 300); // after fonts settle
-    return () => clearTimeout(t);
-  }, [html]);
+  const measure = (event) => {
+    contentObserver.current?.disconnect();
+    const doc = event.currentTarget.contentDocument;
+    const article = doc?.querySelector('.ma-case');
+    if (!article) return;
+    doc.documentElement.style.overflow = 'hidden';
+    const resize = () => setHeight(Math.ceil(article.getBoundingClientRect().height));
+    contentObserver.current = new ResizeObserver(resize);
+    contentObserver.current.observe(article);
+    resize();
+  };
 
   return (
     <div className="preview-frame" ref={wrapRef} style={{ height: height * scale }}>
       <iframe
-        ref={frameRef}
         title="Case study preview"
         srcDoc={html}
         onLoad={measure}
