@@ -9,19 +9,28 @@ import { downloadBrief, downloadHtml, downloadPdf } from './exporters.js';
 import { loadSettings, saveSettings, activeConfig, isReady } from './ai/settings.js';
 import { buildSystemPrompt, parseAssistantText, greetingText } from './ai/prompt.js';
 import { runTurn } from './ai/providers.js';
+import { ATTACHMENT_PROMPT, MAX_HISTORY_BYTES } from './ai/attachments.js';
+import { includeAttachments, normalizeAttachments, saveDraftAttachments } from './caseStudyAttachments.js';
 import { applyPatch, sectionProgress } from './ai/tools.js';
 
 const STORE_KEY = 'case-study-builder:draft';
 const CHAT_KEY = 'case-study-builder:chat';
 const BRAND_KEYS = ['agency', 'author', 'tagline', 'link', 'pageUrl', 'green', 'navy', 'mint', 'photo'];
 const uid = () => Math.random().toString(36).slice(2);
+const attachmentMetadata = ({ id, name, type, size }) => ({ id, name, type, size });
 
-function loadDraft() {
+function loadDraft(files) {
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return { data: normalize(JSON.parse(raw)), isSample: false };
+    if (raw) {
+      const data = normalize(JSON.parse(raw));
+      if (files) data.attachments = normalizeAttachments(files);
+      return { data, isSample: false };
+    }
   } catch { /* ignore */ }
-  return { data: SAMPLE, isSample: true };
+  return files?.length
+    ? { data: emptyData({ attachments: normalizeAttachments(files) }), isSample: false }
+    : { data: SAMPLE, isSample: true };
 }
 function loadChat() {
   try { const m = JSON.parse(localStorage.getItem(CHAT_KEY) || 'null'); if (Array.isArray(m)) return m; } catch { /* ignore */ }
@@ -37,13 +46,14 @@ const greeting = () => ({
 
 // map changed keys → section names, for the "Updated draft" note
 const KEY_TO_SECTION = {};
+KEY_TO_SECTION.attachments = 'Attachments';
 SECTIONS.forEach((s) => {
   s.fields.forEach((f) => (KEY_TO_SECTION[f.k] = s.name));
   (s.lists || []).forEach((l) => (KEY_TO_SECTION[l.id] = s.name));
 });
 
-export default function App() {
-  const [{ data, isSample }, setState] = useState(loadDraft);
+export default function App({ attachmentStorage = {} }) {
+  const [{ data, isSample }, setState] = useState(() => loadDraft(attachmentStorage.files));
   const [mode, setMode] = useState('chat');
   const [messages, setMessages] = useState(() => loadChat() || [greeting()]);
   const [busy, setBusy] = useState(false);
@@ -53,26 +63,45 @@ export default function App() {
   const [showPreview, setShowPreview] = useState(false);
   const [pdfMode, setPdfMode] = useState('long');
   const [pdfBusy, setPdfBusy] = useState(false);
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(attachmentStorage.failed ? 'Could not load saved case study attachments.' : '');
   const [active, setActive] = useState(SECTIONS[0].id);
   const [view, setView] = useState('edit');
   const fileRef = useRef(null);
   const chatInputRef = useRef(null);
   const abortRef = useRef(null);
   const dataRef = useRef(data);
+  const savedAttachments = useRef(data.attachments);
   dataRef.current = data;
 
   const setData = (fn, sample = false) => setState((s) => ({ data: typeof fn === 'function' ? fn(s.data) : fn, isSample: sample }));
   const setField = (k, v) => setData((d) => ({ ...d, [k]: v }));
   const setList = (id, items) => setData((d) => ({ ...d, [id]: items }));
   const keepBrand = (d) => emptyData(Object.fromEntries(BRAND_KEYS.map((k) => [k, d[k]])));
+  const addToDocument = (files, placement) => {
+    const current = isSample ? emptyData() : dataRef.current;
+    const attachments = includeAttachments(current.attachments, files, placement);
+    dataRef.current = { ...current, attachments };
+    setData(dataRef.current);
+    setStatus(`Added ${files.length === 1 ? files[0].name : files.length + ' files'} to the case study.`);
+  };
 
   // autosave draft + chat
   useEffect(() => {
-    const t = setTimeout(() => { try { localStorage.setItem(STORE_KEY, JSON.stringify(data)); } catch { /* ignore */ } }, 300);
+    const { attachments, ...draft } = data;
+    const t = setTimeout(() => { try { localStorage.setItem(STORE_KEY, JSON.stringify(draft)); } catch { /* ignore */ } }, 300);
     return () => clearTimeout(t);
   }, [data]);
-  useEffect(() => { try { localStorage.setItem(CHAT_KEY, JSON.stringify(messages.slice(-200))); } catch { /* ignore */ } }, [messages]);
+  useEffect(() => {
+    if (savedAttachments.current === data.attachments) return;
+    savedAttachments.current = data.attachments;
+    saveDraftAttachments(data.attachments).catch(() => setStatus('Could not save attachments in this browser. Save a brief to keep a copy.'));
+  }, [data.attachments]);
+  useEffect(() => {
+    const transcript = messages.slice(-200).map((m) => m.attachments
+      ? { ...m, attachments: m.attachments.map(attachmentMetadata) }
+      : m);
+    try { localStorage.setItem(CHAT_KEY, JSON.stringify(transcript)); } catch { /* ignore */ }
+  }, [messages]);
 
   // highlight the form section in view
   useEffect(() => {
@@ -88,7 +117,7 @@ export default function App() {
   /* ---------- AI ---------- */
   const runAI = useCallback(async (history) => {
     setBusy(true);
-    setLiveActivity('');
+    setLiveActivity(history.at(-1)?.attachments?.some((file) => file.data) ? 'Processing attachments…' : '');
     const controller = new AbortController();
     abortRef.current = controller;
     const activity = [];
@@ -100,15 +129,21 @@ export default function App() {
         system: buildSystemPrompt(dataRef.current, { web: cfg.web, userName: settings.userName }),
         history: history.filter((m) => (m.role === 'user' || m.role === 'assistant') && !m.greeting),
         signal: controller.signal,
-        onActivity: (a) => { activity.push(a); setLiveActivity(a); },
+        onActivity: (a) => {
+          if (controller.signal.aborted) return;
+          activity.push(a);
+          setLiveActivity(a);
+        },
         onPatch: (patch) => {
-          const [next, changed] = applyPatch(dataRef.current, patch);
+          controller.signal.throwIfAborted();
+          const [next, changed] = applyPatch(dataRef.current, patch, history.flatMap((message) => message.attachments || []));
           dataRef.current = next;
           setData(next);
           changed.forEach((k) => touched.add(KEY_TO_SECTION[k] || k));
           setLiveActivity('Updating the draft…');
         },
       });
+      controller.signal.throwIfAborted();
       if (touched.size) activity.push(`Updated: ${[...touched].join(', ')}`);
       const parsed = parseAssistantText(result.text);
       setMessages((m) => [...m, {
@@ -117,31 +152,54 @@ export default function App() {
         choices: parsed.choices, ready: parsed.ready, activity,
       }]);
     } catch (err) {
+      if (abortRef.current !== controller) return;
       if (err.name !== 'AbortError') setMessages((m) => [...m, { id: uid(), role: 'error', text: err.message || 'Something went wrong.' }]);
       else if (touched.size) setMessages((m) => [...m, { id: uid(), role: 'assistant', text: 'Stopped. Changes made so far are kept.', activity }]);
     } finally {
-      setBusy(false);
-      setLiveActivity('');
-      abortRef.current = null;
+      if (abortRef.current === controller) {
+        setBusy(false);
+        setLiveActivity('');
+        abortRef.current = null;
+      }
     }
   }, [settings]);
 
-  const sendMessage = (text) => {
-    if (isSample) setData(emptyData()); // first real message replaces the sample content (incl. its sample brand)
-    const next = [...messages, { id: uid(), role: 'user', text }];
+  const sendMessage = (text, attachments = []) => {
+    if (isSample) {
+      dataRef.current = emptyData();
+      setData(dataRef.current);
+    }
+    let remaining = MAX_HISTORY_BYTES - attachments.reduce((total, file) => total + file.size, 0);
+    const history = [...messages].reverse().map((m) => {
+      if (!m.attachments) return m;
+      return { ...m, attachments: m.attachments.map((file) => {
+        if (!file.data) return file;
+        if (file.size > remaining) return attachmentMetadata(file);
+        remaining -= file.size;
+        return file;
+      }) };
+    }).reverse();
+    const next = [...history, {
+      id: uid(), role: 'user', text: text || ATTACHMENT_PROMPT,
+      ...(attachments.length ? { attachments } : {}),
+    }];
     setMessages(next);
     runAI(next);
   };
 
   const retry = () => {
+    if (abortRef.current || !isReady(settings)) return;
     const withoutErrors = messages.filter((m) => m.role !== 'error');
     setMessages(withoutErrors);
     runAI(withoutErrors);
   };
 
   const newCaseStudy = () => {
-    if (busy) abortRef.current?.abort();
     if (!window.confirm('Start a new case study? The current draft and chat will be cleared (your brand details are kept).')) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setBusy(false);
+    setLiveActivity('');
     const fresh = isSample ? emptyData() : keepBrand(dataRef.current);
     setData(fresh);
     setMessages([greeting()]);
@@ -207,6 +265,7 @@ export default function App() {
       {mode === 'chat' ? (
         <div className="chatwrap">
           <Chat
+            key={messages[0]?.id}
             messages={messages}
             busy={busy}
             liveActivity={liveActivity}
@@ -214,7 +273,10 @@ export default function App() {
             onRetry={retry}
             onStop={() => abortRef.current?.abort()}
             onPreview={() => setShowPreview(true)}
+            onAddAttachment={addToDocument}
+            includedAttachments={data.attachments}
             hasKey={isReady(settings)}
+            providerKind={activeConfig(settings).kind}
             userName={settings.userName}
             onOpenSettings={() => setShowSettings(true)}
             inputRef={chatInputRef}
@@ -266,7 +328,8 @@ export default function App() {
               <button type="button" role="tab" aria-selected={view === 'preview'} onClick={() => setView('preview')}>Preview</button>
             </div>
             <form className="forms" onSubmit={(e) => e.preventDefault()} autoComplete="off">
-              {SECTIONS.map((s) => <SectionForm key={s.id} section={s} data={data} setField={setField} setList={setList} />)}
+              {SECTIONS.map((s) => <SectionForm key={s.id} section={s} data={data} setField={setField} setList={setList}
+                onAddAttachments={addToDocument} />)}
             </form>
           </main>
           <section className="prev" aria-label="Preview">

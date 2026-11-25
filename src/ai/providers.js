@@ -1,4 +1,5 @@
 import { patchSchema, TOOL_DESCRIPTION, TOOL_NAME } from './tools.js';
+import { acceptsAttachment, attachmentUrl, ATTACHMENT_PROMPT } from './attachments.js';
 
 const MAX_ROUNDS = 12;
 const FETCH_TOOL = 'fetch_webpage';
@@ -11,16 +12,39 @@ const FETCH_SCHEMA = { type: 'object', properties: { url: { type: 'string', desc
 const host = (u) => { try { return new URL(/^https?:/.test(u) ? u : 'https://' + u).hostname; } catch { return u; } };
 
 /** Strictly alternating user/assistant turns, starting with the user. */
-function toTurns(history) {
+function toTurns(history, kind) {
   const turns = [];
+  const lastMessage = history.at(-1);
   for (const m of history) {
-    if (!m.text?.trim() || (m.role !== 'user' && m.role !== 'assistant')) continue;
+    if (m.role !== 'user' && m.role !== 'assistant') continue;
+    const attachments = m.role === 'user' ? m.attachments || [] : [];
+    const files = attachments.filter((file) => file.data && acceptsAttachment(kind, file.type));
+    const unavailable = attachments.filter((file) => !files.includes(file));
+    if (m === lastMessage && unavailable.length) {
+      throw new Error(`Please attach these files again with a compatible model: ${unavailable.map((file) => file.name).join(', ')}.`);
+    }
+    const text = [
+      m.text?.trim() || (files.length ? ATTACHMENT_PROMPT : ''),
+      files.length ? `Attached files in order: ${JSON.stringify(files.map(({ id, name }) => ({ id, name })))}` : '',
+      unavailable.length ? `Earlier attachments unavailable: ${unavailable.map((file) => file.name).join(', ')}` : '',
+    ].filter(Boolean).join('\n\n');
+    if (!text) continue;
     if (!turns.length && m.role === 'assistant') continue;
     const last = turns[turns.length - 1];
-    if (last && last.role === m.role) last.content += '\n\n' + m.text;
-    else turns.push({ role: m.role, content: m.text });
+    const parts = [{ text }, ...files.map((file) => ({ file }))];
+    if (last && last.role === m.role) last.parts.push(...parts);
+    else turns.push({ role: m.role, parts });
   }
   return turns;
+}
+
+function formatMessages(turns, textType, formatFile) {
+  return turns.map(({ role, parts }) => ({
+    role,
+    content: parts.some((part) => part.file)
+      ? parts.map(({ text, file }) => file ? formatFile(file) : { type: textType, text })
+      : parts.map((part) => part.text).join('\n\n'),
+  }));
 }
 
 async function readError(res) {
@@ -44,8 +68,13 @@ async function post(url, headers, body, signal) {
 /** Runs our own tools and returns the text result for the model. */
 async function executeTool(name, args, { onPatch, onActivity, signal }) {
   if (name === TOOL_NAME) {
-    onPatch(args || {});
-    return 'Saved to the draft.';
+    try {
+      onPatch(args || {});
+      return 'Saved to the draft.';
+    } catch (error) {
+      if (error.name === 'AbortError') throw error;
+      return `Could not save to the draft: ${error.message}`;
+    }
   }
   if (name === FETCH_TOOL) {
     const url = String(args?.url || '');
@@ -73,7 +102,7 @@ export async function runTurn({ cfg, system, history, onPatch, onActivity, signa
   if (!cfg.apiKey && !cfg.keyOptional) throw new Error('Add your API key in Settings first.');
   const ctx = { onPatch, onActivity, signal };
   const run = { anthropic: runAnthropic, openai: runOpenAI, gemini: runGemini, compat: runCompat }[cfg.kind];
-  return run(cfg, system, toTurns(history), ctx);
+  return run(cfg, system, toTurns(history, cfg.kind), ctx);
 }
 
 /* ---------- Claude (Anthropic Messages API) ---------- */
@@ -84,7 +113,10 @@ async function runAnthropic(cfg, system, turns, ctx) {
     tools.push({ type: 'web_search_20250305', name: 'web_search', max_uses: 5 });
   }
   const headers = { 'x-api-key': cfg.apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
-  const messages = turns.map((t) => ({ ...t }));
+  const messages = formatMessages(turns, 'text', ({ type, data }) => ({
+    type: type === 'application/pdf' ? 'document' : 'image',
+    source: { type: 'base64', media_type: type, data },
+  }));
   const texts = [];
   for (let i = 0; i < MAX_ROUNDS; i++) {
     const data = await post('/api/anthropic/v1/messages', headers, { model: cfg.model, max_tokens: 8000, system, messages, tools }, ctx.signal);
@@ -110,7 +142,10 @@ async function runOpenAI(cfg, system, turns, ctx) {
     tools.push({ type: 'web_search' });
   }
   const headers = { authorization: `Bearer ${cfg.apiKey}` };
-  let body = { model: cfg.model, instructions: system, input: turns, tools };
+  const input = formatMessages(turns, 'input_text', (file) => file.type === 'application/pdf'
+    ? { type: 'input_file', filename: file.name, file_data: attachmentUrl(file) }
+    : { type: 'input_image', image_url: attachmentUrl(file), detail: 'auto' });
+  let body = { model: cfg.model, instructions: system, input, tools };
   const texts = [];
   for (let i = 0; i < MAX_ROUNDS; i++) {
     const data = await post('/api/openai/v1/responses', headers, body, ctx.signal);
@@ -140,7 +175,10 @@ async function runOpenAI(cfg, system, turns, ctx) {
 async function runGemini(cfg, system, turns, ctx) {
   const decls = [{ name: TOOL_NAME, description: TOOL_DESCRIPTION, parameters: patchSchema() }];
   if (cfg.web) decls.push({ name: FETCH_TOOL, description: FETCH_DESCRIPTION, parameters: FETCH_SCHEMA });
-  const contents = turns.map((t) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.content }] }));
+  const contents = turns.map(({ role, parts }) => ({
+    role: role === 'assistant' ? 'model' : 'user',
+    parts: parts.map(({ text, file }) => file ? { inlineData: { mimeType: file.type, data: file.data } } : { text }),
+  }));
   const headers = { 'x-goog-api-key': cfg.apiKey };
   const url = `/api/gemini/v1beta/models/${encodeURIComponent(cfg.model)}:generateContent`;
   const texts = [];
@@ -177,7 +215,9 @@ async function runCompat(cfg, system, turns, ctx) {
   if (cfg.web) tools.push({ type: 'function', function: { name: FETCH_TOOL, description: FETCH_DESCRIPTION, parameters: FETCH_SCHEMA } });
   const headers = { 'x-target-base': cfg.baseUrl, 'x-title': 'Case Study Builder' };
   if (cfg.apiKey) headers.authorization = `Bearer ${cfg.apiKey}`;
-  const messages = [{ role: 'system', content: system }, ...turns];
+  const messages = [{ role: 'system', content: system }, ...formatMessages(turns, 'text', (file) => ({
+    type: 'image_url', image_url: { url: attachmentUrl(file) },
+  }))];
   const texts = [];
   for (let i = 0; i < MAX_ROUNDS; i++) {
     const data = await post('/api/compat/chat/completions', headers, { model: cfg.model, messages, tools }, ctx.signal);

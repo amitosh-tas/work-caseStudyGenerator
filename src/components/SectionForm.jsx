@@ -1,14 +1,19 @@
 import Field from './Field.jsx';
 import ListEditor from './ListEditor.jsx';
+import DocumentAttachments from './DocumentAttachments.jsx';
 import { readImage } from '../exporters.js';
 
-export default function SectionForm({ section, data, setField, setList }) {
+export default function SectionForm({ section, data, setField, setList, onAddAttachments }) {
   const short = section.fields.filter((f) => f.t !== 'area');
   const long = section.fields.filter((f) => f.t === 'area');
 
   return (
     <fieldset id={`s-${section.id}`}>
       <legend>{section.name}</legend>
+      {section.id === 'attachments' && (
+        <DocumentAttachments files={data.attachments} onAdd={onAddAttachments}
+          onChange={(files) => setField('attachments', files)} />
+      )}
       {short.length > 0 && (
         <div className="row">
           {short.map((f) =>

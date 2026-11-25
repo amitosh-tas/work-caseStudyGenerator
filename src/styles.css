@@ -138,6 +138,21 @@ input[type=file] { font-size: 14px; padding: 8px; }
 .send { width: 40px; min-height: 40px; height: 40px; padding: 0; border-radius: 50%; background: #1f2328; color: #fff; border: 0; font-size: 18px; flex: none; }
 .send:disabled { background: #c9ccd1; }
 .composer-note { max-width: 780px; margin: 6px auto 0; font-size: 12px; color: var(--mute); text-align: center; }
+.attach { width: 40px; min-height: 40px; display: grid; place-items: center; flex: none; padding: 0; border: 0; border-radius: 50%; }
+.attach:hover:enabled { background: #f1f2f4; }
+.chat-attachments, .msg .bubble .chat-attachments { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0 0 8px; padding: 0; }
+.composer .chat-attachments, .attachment-error { max-width: 780px; margin: 0 auto 8px; }
+.chat-attachments li, .msg .bubble .chat-attachments li { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; margin: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 13px; }
+.chat-attachments img { width: 34px; height: 34px; object-fit: cover; border-radius: 5px; }
+.chat-attachments span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-attachments small { display: block; color: var(--mute); }
+.chat-attachments button { min-width: 32px; min-height: 32px; padding: 0; border: 0; background: transparent; }
+.attachment-error { color: #8a1631; font-size: 13px; overflow-wrap: anywhere; }
+.document-attachments ul { display: grid; gap: 8px; padding: 0; list-style: none; }
+.document-attachments li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.document-attachments li a { flex: 1 1 160px; overflow-wrap: anywhere; }
+.document-attachments li select { width: auto; }
+.document-attachments img { width: 44px; height: 44px; object-fit: cover; border-radius: 5px; }
 
 .draft-panel { background: var(--bg); padding: 20px; overflow-y: auto; display: grid; gap: 14px; align-content: start; }
 .dp-head { display: flex; justify-content: space-between; align-items: baseline; }

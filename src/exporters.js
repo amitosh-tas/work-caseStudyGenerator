@@ -1,4 +1,6 @@
 import { caseStudyBody, caseStudyCss, caseStudyDocument, fileSlug } from './renderCaseStudy.js';
+import { isImage } from './caseStudyAttachments.js';
+import { embedPdfAttachments } from './pdfAttachments.js';
 
 const PAGE_WIDTH = 1240; // desktop width the design is rendered at
 
@@ -45,7 +47,7 @@ export async function downloadPdf(data, mode = 'long', onProgress = () => {}) {
     let pdf;
     if (mode === 'a4') {
       // section boundaries (in canvas pixels) are the preferred cut points
-      const cuts = [...el.querySelectorAll('.ma-section, .ma-card, .ma-node, .ma-faq')].map((n) => {
+      const cuts = [...el.querySelectorAll('.ma-section, .ma-card, .ma-node, .ma-faq, .ma-file')].map((n) => {
         const r = n.getBoundingClientRect(), top = el.getBoundingClientRect().top;
         return Math.round((r.top - top) * scale);
       });
@@ -74,6 +76,7 @@ export async function downloadPdf(data, mode = 'long', onProgress = () => {}) {
       pdf = new jsPDF({ unit: 'pt', format: [w, h], orientation: h >= w ? 'portrait' : 'landscape', compress: true });
       pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, w, h);
     }
+    embedPdfAttachments(pdf, (data.attachments || []).filter((file) => !isImage(file)));
     pdf.save(`${fileSlug(data)}-case-study.pdf`);
   } finally {
     host.remove();

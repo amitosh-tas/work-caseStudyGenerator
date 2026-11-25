@@ -34,6 +34,21 @@ Then click the **gear icon** and set:
 
 The model names in Settings are only suggestions, because providers rename models often. Use **Load my models** to see the real list. The AI needs a model that supports tool/function calling.
 
+## Attach files in AI chat
+
+Use the paperclip to attach up to four files, with a combined limit of 6 MB per message. Add a question, or send the files on their own for a case study summary. Images include JPEG, PNG and WebP.
+
+| Provider | Attachments |
+|---|---|
+| Claude | Images up to 3 MB each and PDFs |
+| OpenAI | Images and PDFs |
+| Gemini | Images, PDFs, MP3, WAV, MP4 and WebM |
+| OpenAI-compatible providers | Images with a model and endpoint that support image data URLs |
+
+Attachments are sent to the selected provider. Use a model that supports both the attachment type and tool calling. The browser saves attachment names in the transcript. File contents are available during the current page session, with up to 12 MB kept for follow-up turns. Attach a file again if you need to revisit it after reloading or after its contents become unavailable.
+
+To keep a file in the case study, ask the AI to include it or click **Add to case study** on the chat attachment. You can also upload files, remove them, and move images to the **Hero** from **Form → Attachments**. These files are saved with the draft in the browser and included in saved briefs. Images appear inline in both exports. The web page offers playback for audio and video and downloads for supporting files. The PDF embeds PDFs, audio, and video as files accessible from the PDF reader's attachments panel.
+
 **Page reader:** when **Let the AI read websites** is on, the app's own server fetches the client's pages (`/api/fetch`). It returns the readable text, internal links and **platform clues** found in the page code and server headers: Shopify, WordPress, WooCommerce, Elementor, Wix, Webflow, Next.js, GTM/GA, Meta Pixel, Klaviyo, HubSpot, GoHighLevel, Stripe, Razorpay, Calendly, Cloudflare, Vercel, Netlify and more. The AI uses these to suggest the tech stack and hosting, then confirms them with you.
 
 ## Deploy

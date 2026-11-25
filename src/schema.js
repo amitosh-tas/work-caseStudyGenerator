@@ -1,6 +1,8 @@
 // All sections, fields and repeatable lists of the case study.
 // Field types: 'text' (default), 'area', 'color', 'file'.
 
+import { normalizeAttachments } from './caseStudyAttachments.js';
+
 const T = (k, label, o = {}) => ({ k, label, t: 'text', ...o });
 const A = (k, label, o = {}) => ({ k, label, t: 'area', ...o });
 
@@ -84,6 +86,9 @@ export const SECTIONS = [
     lists: [{ id: 'faq', name: 'Questions', max: 8, fields: [{ k: 'q', label: 'Question' }, { k: 'a', label: 'Answer', t: 'area' }] }],
   },
   {
+    id: 'attachments', name: 'Attachments', color: '#52647a', fields: [],
+  },
+  {
     id: 'cta', name: 'Call to action', color: '#111827',
     fields: [
       T('barTitle', 'Mid-page banner title'),
@@ -100,7 +105,7 @@ export const LISTS = SECTIONS.flatMap((s) => s.lists || []);
 export const DEFAULT_COLORS = { green: '#116e08', navy: '#001935', mint: '#f4f9f3' };
 
 export function emptyData(keep = {}) {
-  const d = { photo: '' };
+  const d = { photo: '', attachments: [] };
   FIELDS.forEach((f) => (d[f.k] = f.t === 'color' ? DEFAULT_COLORS[f.k] : ''));
   LISTS.forEach((l) => (d[l.id] = []));
   return { ...d, ...keep };
@@ -115,6 +120,7 @@ export function normalize(o) {
     if (Array.isArray(o[l.id])) d[l.id] = o[l.id].slice(0, l.max).map((x) => Object.fromEntries(l.fields.map((f) => [f.k, String(x?.[f.k] ?? '')])));
   });
   d.photo = typeof o.photo === 'string' && o.photo.startsWith('data:image/') ? o.photo : '';
+  d.attachments = normalizeAttachments(o.attachments);
   return d;
 }
 

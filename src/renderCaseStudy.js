@@ -1,5 +1,7 @@
 // Turns the form data into the case study markup, using the uploaded design (ma-case classes).
 import designCss from './caseStudy.css?raw';
+import { attachmentUrl } from './ai/attachments.js';
+import { isImage } from './caseStudyAttachments.js';
 
 export const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -16,13 +18,13 @@ export function caseStudyCss(d) {
  * Inner HTML of <article class="ma-case">.
  * forPdf: opens the FAQ answers so they appear in the PDF.
  */
-export function caseStudyBody(d, { forPdf = false } = {}) {
+export function caseStudyBody(d, { forPdf = false, openFaq = forPdf } = {}) {
   const v = (k) => String(d[k] ?? '').trim();
   const ag = v('agency') || 'Agency';
   const au = v('author');
   const title = v('title') || 'Case study';
   const link = safeUrl(v('link'));
-  const img = (sz) => (d.photo ? `<img src="${d.photo}" alt="${esc(au || ag)}" width="${sz}" height="${sz}" loading="lazy" decoding="async">` : '');
+  const img = (sz) => (d.photo ? `<img src="${d.photo}" alt="${esc(au || ag)}" width="${sz}" height="${sz}" loading="${forPdf ? 'eager' : 'lazy'}" decoding="async">` : '');
   const P = (t) => paras(t).map((p) => `<p>${esc(p)}</p>`).join('');
   const section = (cls, inner, id) => `<section class="ma-section ${cls}"${id ? ` id="${id}"` : ''}><div class="ma-inner">${inner}</div></section>`;
   const kh = (k, h) => `${k ? `<div class="ma-kicker"><p>${esc(k)}</p></div>` : ''}${h ? `<h2>${esc(h)}</h2>` : ''}`;
@@ -33,10 +35,22 @@ export function caseStudyBody(d, { forPdf = false } = {}) {
   const trunk = filled(d.trunk), yes = filled(d.yes), no = filled(d.no), sep = filled(d.sep);
   const tools = filled(d.tools), faq = filled(d.faq), metrics = filled(d.metrics);
   const stack = v('stack').split(',').map((x) => x.trim()).filter(Boolean);
+  const attachments = d.attachments || [];
+  const attachmentGrid = (files) => files.length ? `<div class="ma-grid">${files.map((file) => {
+    const name = esc(file.name);
+    const url = esc(attachmentUrl(file));
+    if (isImage(file)) return `<figure class="ma-file"><img src="${url}" alt="${name}"><figcaption>${name}</figcaption></figure>`;
+    if (forPdf) return `<div class="ma-card ma-file"><strong>${name}</strong><p>Embedded file in this PDF</p></div>`;
+    const player = file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : '';
+    return `<div class="ma-card ma-file">${player ? `<${player} controls preload="none" src="${url}"></${player}>` : ''}<a href="${url}" download="${name}">${name}</a></div>`;
+  }).join('')}</div>` : '';
   let h = '';
 
   // Hero
   h += section('ma-hero', `${v('kicker') ? `<div class="ma-kicker"><p>${esc(v('kicker'))}</p></div>` : ''}<h1>${esc(title)}</h1>${v('deck') ? `<div class="ma-deck"><p>${esc(v('deck'))}</p></div>` : ''}${v('intro') ? `<div class="ma-prose"><p>${esc(v('intro'))}</p></div>` : ''}${v('byline') ? `<div class="ma-small"><p>${esc(v('byline'))}</p></div>` : ''}${v('heroBtn') && trunk.length ? `<div class="ma-button ma-gap"><a href="#workflow">${esc(v('heroBtn'))}</a></div>` : ''}${facts.length ? `<div class="ma-grid ma-four">${facts.map((f) => `<div class="ma-card"><span class="ma-label">${esc(f.label)}</span><strong>${esc(f.value)}</strong></div>`).join('')}</div>` : ''}`);
+
+  const heroFiles = attachments.filter((file) => file.placement === 'hero');
+  if (heroFiles.length) h = h.replace(/<\/div><\/section>$/, () => `${attachmentGrid(heroFiles)}</div></section>`);
 
   // Challenge
   if (v('chHead') || v('chText') || cards.length)
@@ -72,7 +86,10 @@ export function caseStudyBody(d, { forPdf = false } = {}) {
 
   // FAQ
   if (faq.length)
-    h += section('ma-mint', `${kh('Project questions', v('faHead'))}<div>${faq.map((q) => `<details class="ma-faq"${forPdf ? ' open' : ''}><summary>${esc(q.q)}</summary><p>${esc(q.a)}</p></details>`).join('')}</div>`);
+    h += section('ma-mint', `${kh('Project questions', v('faHead'))}<div>${faq.map((q) => `<details class="ma-faq"${openFaq ? ' open' : ''}><summary>${esc(q.q)}</summary><p>${esc(q.a)}</p></details>`).join('')}</div>`);
+
+  const appendix = attachments.filter((file) => file.placement !== 'hero');
+  if (appendix.length) h += section('', `<h2>Attachments</h2>${attachmentGrid(appendix)}`);
 
   // Closing
   h += section('ma-dark', `${kh('Work with ' + (au || ag), v('endHead'))}<div class="ma-prose">${P(v('endText'))}</div><div class="ma-contact">${img(64)}<div><p><strong>${esc(au ? 'Talk with ' + au : ag)}</strong></p><p>${esc(v('tagline'))}</p></div></div>${v('btnLabel') ? `<div class="ma-button ma-gap"><a href="${esc(link || '#')}">${esc(v('btnLabel'))}</a></div>` : ''}`);
