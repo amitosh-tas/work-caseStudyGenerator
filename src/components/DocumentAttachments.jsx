@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { attachmentAccept, attachmentUrl, describeAttachment, MAX_ATTACHMENT_BYTES, readAttachment } from '../ai/attachments.js';
 import { isImage } from '../caseStudyAttachments.js';
 
 export default function DocumentAttachments({ files, onAdd, onChange }) {
   const [reading, setReading] = useState(false);
   const [error, setError] = useState('');
+  const picker = useRef(null);
+  const update = (id, patch) => onChange(files.map((file) => file.id === id ? { ...file, ...patch } : file));
 
   const upload = async (event) => {
     const input = event.target;
@@ -32,28 +34,46 @@ export default function DocumentAttachments({ files, onAdd, onChange }) {
 
   return (
     <div className="document-attachments">
-      <label>
-        Add images, PDFs, audio, or video
-        <input type="file" multiple accept={attachmentAccept('gemini')} onChange={upload} disabled={reading} />
-      </label>
-      {reading && <p role="status">Reading files…</p>}
+      <div className="document-upload">
+        <input ref={picker} type="file" hidden multiple accept={attachmentAccept('gemini')} onChange={upload} disabled={reading} />
+        <button type="button" disabled={reading} onClick={() => picker.current?.click()}>+ Add files</button>
+        <small role="status">{reading ? 'Reading files…' : 'Images, PDFs, audio, and video'}</small>
+      </div>
       {error && <p role="alert">{error}</p>}
       {files.length > 0 && (
         <ul>
           {files.map((file) => (
             <li key={file.id}>
-              {isImage(file) && <img src={attachmentUrl(file)} alt="" />}
-              <a href={attachmentUrl(file)} download={file.name}>{file.name}</a>
+              <div className="document-file">
+                {isImage(file) && <img src={attachmentUrl(file)} alt="" />}
+                <a href={attachmentUrl(file)} download={file.name} title={file.name}>{file.name}</a>
+                <button type="button" aria-label={`Remove ${file.name}`} disabled={reading}
+                  onClick={() => onChange(files.filter((item) => item.id !== file.id))}>Remove</button>
+              </div>
               {isImage(file) && (
-                <select aria-label={`Placement for ${file.name}`} value={file.placement} disabled={reading}
-                  onChange={(event) => onChange(files.map((item) => item.id === file.id
-                    ? { ...item, placement: event.target.value } : item))}>
-                  <option value="appendix">Attachments section</option>
-                  <option value="hero">Hero</option>
-                </select>
+                <div className="image-layout">
+                  <label>Placement
+                    <select aria-label={`Placement for ${file.name}`} value={file.placement} disabled={reading}
+                      onChange={(event) => update(file.id, { placement: event.target.value })}>
+                      <option value="appendix">Attachments section</option>
+                      <option value="hero">Hero</option>
+                    </select>
+                  </label>
+                  <label>Layout
+                    <select value={file.layout || 'pair'} aria-label={`Layout for ${file.name}`} disabled={reading}
+                      onChange={(event) => update(file.id, { layout: event.target.value })}>
+                      <option value="pair">Side by side</option>
+                      <option value="full">Full width</option>
+                      <option value="text">Image with text</option>
+                    </select>
+                  </label>
+                  {file.layout === 'text' && (
+                    <label className="image-layout-text">Text beside image
+                      <textarea value={file.text || ''} onChange={(event) => update(file.id, { text: event.target.value })} />
+                    </label>
+                  )}
+                </div>
               )}
-              <button type="button" aria-label={`Remove ${file.name}`} disabled={reading}
-                onClick={() => onChange(files.filter((item) => item.id !== file.id))}>Remove</button>
             </li>
           ))}
         </ul>

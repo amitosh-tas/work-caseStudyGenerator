@@ -39,7 +39,11 @@ export function caseStudyBody(d, { forPdf = false, preview = false } = {}) {
   const attachments = d.attachments || [];
   const attachmentGrid = (files) => files.length ? `<div class="ma-grid">${files.map((file) => {
     const name = esc(file.name);
-    if (isImage(file)) return `<figure class="ma-file"><img src="${esc(attachmentUrl(file))}" alt="${name}"><figcaption>${name}</figcaption></figure>`;
+    if (isImage(file)) {
+      const image = `<figure class="ma-file${file.layout === 'full' ? ' ma-file-wide' : ''}"><img src="${esc(attachmentUrl(file))}" alt="${name}"><figcaption>${name}</figcaption></figure>`;
+      if (file.layout === 'text') return `<div class="ma-file ma-file-wide ma-file-split">${image}<div class="ma-prose">${P(file.text)}</div></div>`;
+      return image;
+    }
     const label = forPdf || preview ? name : `<a href="${esc(attachmentUrl(file))}" download="${name}">${name}</a>`;
     return `<div class="ma-card ma-file">${label}</div>`;
   }).join('')}</div>` : '';

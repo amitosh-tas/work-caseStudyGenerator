@@ -158,11 +158,18 @@ input[type=file] { font-size: 14px; padding: 8px; }
 .chat-attachments small { display: block; color: var(--mute); }
 .chat-attachments button { min-width: 32px; min-height: 32px; padding: 0; border: 0; background: transparent; }
 .attachment-error { color: #8a1631; font-size: 13px; overflow-wrap: anywhere; }
-.document-attachments ul { display: grid; gap: 8px; padding: 0; list-style: none; }
-.document-attachments li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.document-attachments li a { flex: 1 1 160px; overflow-wrap: anywhere; }
-.document-attachments li select { width: auto; }
-.document-attachments img { width: 44px; height: 44px; object-fit: cover; border-radius: 5px; }
+.document-upload, .document-file { display: flex; align-items: center; gap: 10px; }
+.document-upload { flex-wrap: wrap; }
+.document-upload small { color: var(--mute); }
+.document-attachments ul { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
+.document-attachments li { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: #fafbfc; }
+.document-file a { flex: 1; color: var(--ink); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.document-file button { padding: 0 10px; font-size: 13px; }
+.document-attachments img { width: 42px; height: 42px; object-fit: cover; border-radius: 6px; flex: none; }
+.image-layout { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; }
+.image-layout label { font-size: 13px; }
+.image-layout select { font-size: 14px; }
+.image-layout-text { grid-column: 1 / -1; }
 
 .draft-panel { background: var(--bg); padding: 20px; overflow-y: auto; display: grid; gap: 14px; align-content: start; }
 .dp-head { display: flex; justify-content: space-between; align-items: baseline; }
